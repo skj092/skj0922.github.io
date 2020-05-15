@@ -1,0 +1,534 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Another data science student's blog - Experiments</title><link href="/" rel="alternate"></link><link href="/feeds/experiments.atom.xml" rel="self"></link><id>/</id><updated>2018-05-03T16:22:00-04:00</updated><entry><title>Deep Painterly Harmonization</title><link href="/deep-painterly-harmonization.html" rel="alternate"></link><published>2018-05-03T16:22:00-04:00</published><updated>2018-05-03T16:22:00-04:00</updated><author><name>Sylvain Gugger</name></author><id>tag:None,2018-05-03:/deep-painterly-harmonization.html</id><summary type="html">&lt;p class="first last"&gt;In this article we'll decode the research article with the same name and get some cool results integrating random objects in paintings while preserving their style.&lt;/p&gt;
+</summary><content type="html">&lt;p&gt;In this article we'll decode &lt;a class="reference external" href="https://arxiv.org/abs/1804.03189"&gt;this article&lt;/a&gt; and get some cool results integrating random objects in paintings while preserving their style like this&lt;/p&gt;
+&lt;img alt="Example 1" class="align-center" src="../images/art8_eiffel.png" style="width: 600px;" /&gt;
+&lt;p&gt;or like this&lt;/p&gt;
+&lt;img alt="Example 2" class="align-center" src="../images/art8_shield.png" style="width: 600px;" /&gt;
+&lt;p&gt;It goes with &lt;a class="reference external" href="https://github.com/sgugger/Deep-Learning/blob/master/DeepPainterlyHarmonization.ipynb"&gt;this notebook&lt;/a&gt; where I have tried to replicate the experiments (all images shown in this post come from applying it).&lt;/p&gt;
+&lt;div class="section" id="style-transfer"&gt;
+&lt;h2&gt;Style Transfer&lt;/h2&gt;
+&lt;p&gt;To read more about the basics of style transfer, I can only recommend the &lt;a class="reference external" href="http://fast.ai"&gt;fast.ai&lt;/a&gt; course, or &lt;a class="reference external" href="https://medium.com/&amp;#64;shivamgoel1791/everything-you-need-to-know-about-neural-style-transfer-994530cc9a6e"&gt;this blog post&lt;/a&gt; by an international fellow colleague. Since there's a lot to cover,
+I will assume you are familiar with this. To make things simple, we will try to match in some way (that is going to be defined later) the features a CNN computes on our
+input image with the features it computes on our output image.&lt;/p&gt;
+&lt;p&gt;The model the team who wrote the article chose is VGG19. However, I found similar results with VGG16 which is a bit faster, and lighter in terms of memory, so I used this one. Then
+we will grab the results of five convolutional layers, the first one and the ones just after the MaxPooling layers (where we half the resolution). The idea is that each will give
+us some different kind of information. The first convolutional layer is very close to the image, so it will focus more on the details, while the fifth one will be more conceptual
+and its activation will represent general properties of the picture.&lt;/p&gt;
+&lt;p&gt;Now to properly integrate the new object in the painting, the authors of the article propose to make two different phases. The first one will focus more on the general style, giving
+an intermediate result that where the object will still stand out a bit in the picture. The second phase will focus more on the details, and smoothening the edges that could have
+appeared during the first part. Here is an example of the result of the two stages.&lt;/p&gt;
+&lt;img alt="Stage 1 and 2" class="align-center" src="../images/art8_eiffel_stages.png" style="width: 600px;" /&gt;
+&lt;p&gt;Before going further, a bit of vocabulary. As in the article, we'll call the content picture the painting with our object pasted on it and the style picture the original painting.
+The input is the content picture for phase 1, the result of this first stage for phase 2. In both cases, we'll compute the results of the convolutional layers for the content
+picture and the style picture at first, which will serve as our reference features. Then we compute the results of the same convolutional layers for our input, compare them to these
+references and calculate a loss from that.&lt;/p&gt;
+&lt;p&gt;At this point, it's all a matter of classic training: we'll compute the gradients of this loss and use them to get a better input, then reiterate the process. As long as our
+loss properly represents what we want (the object transformed to the style of the painting), we should get some good result. Since the number of parameters is way less than usual
+(only the pixels of our input compared to all the weights of a model, usually) we can use a variant of SGD that will not only calculate the gradients, but the second derivative
+as well (the hessian matrix). Without going into the details, this will allow us to make smarter steps each time we update our input, and converge a lot faster. Specifically, we'll
+use the &lt;a class="reference external" href="https://en.wikipedia.org/wiki/Limited-memory_BFGS"&gt;LBFGS optimizer&lt;/a&gt; which is already implemented in pytorch.&lt;/p&gt;
+&lt;p&gt;This all seems pretty straightforward, but that's because we didn't get to the tough part yet: what are these two magical loss functions (one for stage 1 and one for stage 2) that
+we will use?&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section" id="the-first-pass"&gt;
+&lt;h2&gt;The first pass&lt;/h2&gt;
+&lt;p&gt;The loss function used in this pass is exactly the same as in the &lt;a class="reference external" href="https://www.cv-foundation.org/openaccess/content_cvpr_2016/papers/Gatys_Image_Style_Transfer_CVPR_2016_paper.pdf"&gt;original work of Gatys et al.&lt;/a&gt; There is a content loss, that measures the difference between
+our input and the content image, a style loss, that measures the difference between our input and the style image, and we sum them with certain weights to get our final loss.&lt;/p&gt;
+&lt;p&gt;The main difference is that the article was intended to match a whole picture with a certain style, whereas we only have to worry about part of the picture, the object we add.
+That means we will mask all the parts of the image that have nothing to do with it when we compute our loss.&lt;/p&gt;
+&lt;img alt="Mask on the content image" class="align-center" src="../images/art8_mask.png" style="width: 600px;" /&gt;
+&lt;p&gt;In practice, we will use a slightly dilated mask, that encircles a bit more than just the object we're adding (as the authors did in the &lt;a class="reference external" href="https://github.com/luanfujun/deep-painterly-harmonization"&gt;code they published&lt;/a&gt; ). We don't apply that mask before sending the content image, the style image or the output image in the model,
+which would make us loose information too early, but we resize it to match the dimensions of our different features (the results from the convolutional layers) and apply it to
+those.&lt;/p&gt;
+&lt;p&gt;The content loss is then pretty straightforward: it's the mean-squared error between the masked features of our content image and the masked features of our input. The authors
+chose to use the result of the fourth convolutional layer only for this content loss. Using one of the first convolutional layers would force the final output to match the initial
+object too closely.&lt;/p&gt;
+&lt;p&gt;The style loss is a bit trickier. We'll use Gram matrices like we do for regular style transfer, but the problem of the mask is that it might hide some useful information
+regarding the style. For the content, all the details we needed were inside the mask, because that's where the object we are adding is, but the general style of the painting is
+more global. That's why before we apply the mask to the style features, we will make some kind of matching to reorganize them.&lt;/p&gt;
+&lt;img alt="Mask on the style image" class="align-center" src="../images/art8_mask_style.png" style="width: 600px;" /&gt;
+&lt;p&gt;To be more specific, for each layer of results we have from our model, we'll look at each 3 by 3 (by the number of channels) part of the content features (or patch, as they call it
+in the article) and find the 3 by 3 patch in the style features that looks the most like it, and match them. To measure how much two patches look alike, we'll use the cosine similarity
+between them.&lt;/p&gt;
+&lt;p&gt;Once that mapping is done (note that it is done once and for all between the content and the style), we will transform the style features so that the centers of each 3 by 3 patch
+in the content features is aligned with its match in the style features. Then
+we will apply the resized mask on the input features and the style features, compute the Gram matrices of both of them then take the mean-squared error to give us the style loss.
+The authors chose to use the convolutional layers number 3, 4 and 5 for this style loss, and take the mean of the three of them.&lt;/p&gt;
+&lt;p&gt;The final loss of this first stage is then:&lt;/p&gt;
+&lt;div class="math"&gt;
+\begin{equation*}
+\mathcal{L} = 5 \mathcal{L}_{content} + 100 \mathcal{L}_{loss}
+\end{equation*}
+&lt;/div&gt;
+&lt;p&gt;Once we're done with the construction of our input (they use 1000 iterations in the paper), we make a mean between our output and the style picture to have our final output. We
+could just use the mask around our object, but that will get an abrupt transition that will stand out, so we use a Gaussian blurring on the sides of the mask (so that we get from
+the 1s to the 0s a it more smoothly), then compute&lt;/p&gt;
+&lt;div class="math"&gt;
+\begin{equation*}
+\hbox{final output} = \hbox{blurred mask} \times \hbox{output} + (1 - \hbox{blurred mask}) \times \hbox{style picture}.
+\end{equation*}
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="section" id="the-second-pass"&gt;
+&lt;h2&gt;The second pass&lt;/h2&gt;
+&lt;p&gt;As good as the results of the first pass already are, they usually have two defaults that make the object we added in the painting stand out: first we didn't use any of the features
+of the first convolutional layers so the fine details, especially those of the painting style, won't be present. Then we didn't do anything to make sure our final picture is smooth.&lt;/p&gt;
+&lt;p&gt;To remedy to those two things, the authors propose to do a second pass to refine the first result. The first change is in the matching process. This time, the matching between the
+content and the style is done on a reference layer first, and the results will be transported to the others, but this mapping won't be different for each layer like in the first pass.
+Then, after doing the first mapping between the content and the style for this reference layer like in the first stage, they refine it by trying to insure that adjacent vectors in the
+style features remain adjacent through the mapping.&lt;/p&gt;
+&lt;img alt="Neighbor matching algorithm" class="align-center" src="../images/art8_algo2.png" style="width: 400px;" /&gt;
+&lt;p&gt;For each pixel p, we consider a certain set of candidates built by going in every direction on p' (in the code they take the full 5 by 5 square centered on p), taking the value
+given by our first match, and applying to it the inverse of the translation that goes from p to p'. Then we find the candidate that minimizes the L2 loss between its style
+features and the ones of its neighbors.&lt;/p&gt;
+&lt;p&gt;Once that matching is done for the reference layer (the authors chose the fourth one), we resize it for the other layers, then proceed like in the first stage to compute the
+style loss. There is just one difference, they indicate in their article that they suppress the repetitions of the style vectors picked more than once. This is possible because
+the Gram matrix doesn't care about the exact spacial location of a style feature (since we sum other all locations for each coefficient) but having too many times the same
+style vectors apparently hurt a bit the performance.&lt;/p&gt;
+&lt;p&gt;The matching being done, the authors use this time the convolutional layers number 1, 2, 3 and 4 for the style loss (and take the mean of them), and the fourth convolutional layer
+for the content loss. To add more details to the final output, they also consider two more losses. The first one, the Total Variation loss, just sums the difference between
+adjacent pixel values, which will insure the result is smoother:&lt;/p&gt;
+&lt;div class="math"&gt;
+\begin{equation*}
+\mathcal{L}_{tv} = \sum_{x,y} ((O_{x,y} - O_{x-1,y})^{2} + (O_{x,y} - O_{x,y-1})^{2})
+\end{equation*}
+&lt;/div&gt;
+&lt;p&gt;where O designs our output. The last one is the histogram loss introduced in &lt;a class="reference external" href="https://arxiv.org/abs/1701.08893"&gt;this other article&lt;/a&gt; .&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section" id="the-histogram-loss"&gt;
+&lt;h2&gt;The histogram loss&lt;/h2&gt;
+&lt;p&gt;Histogram matching is a technique that is often used to modify a certain photograph with the luminosity or shadows of another. The technique in itself is explained on &lt;a class="reference external" href="https://en.wikipedia.org/wiki/Histogram_matching"&gt;wikipedia&lt;/a&gt; and here is a concrete example of application.&lt;/p&gt;
+&lt;img alt="Histogram matching" class="align-center" src="../images/art8_hist_match.png" style="width: 600px;" /&gt;
+&lt;p&gt;In their paper, Pierre Wilmot et al. found that applying the same technique to define another loss could help preserve the textures of the style picture. They recommended to use
+it for the features of the first convolutional layer and the fourth one, for both the fine details and the more general aspects of the style.&lt;/p&gt;
+&lt;p&gt;The idea is, for these two layers, to compute the histogram of each channel of the style features as a reference. Then, at each pass of our training, we calculate the remapping of
+our output features so that their histogram (for each channel) matches the style reference. We then define the histogram loss as being the the mean-squared error between the output
+features and their remapped version. The challenge here is to compute that remapping.&lt;/p&gt;
+&lt;p&gt;Let's say we are trying to change x so that it matches an histogram hist. We sort x first, while keeping the permutation we had to do (it will be used at the end to put the new values
+we interpolate in their right place). Then, when we treat the i-th value, we look at the first index idx such has hist.cumsum(idx) is greater than i (which means the i-th value of the
+data we are trying to match the histogram is in the bin with index idx). The value attributed to x[i] is basically&lt;/p&gt;
+&lt;div class="math"&gt;
+\begin{equation*}
+\hbox{min} + \hbox{idx} \times \frac{\hbox{max} - \hbox{min}}{n_{bins}}
+\end{equation*}
+&lt;/div&gt;
+&lt;p&gt;where &lt;span class="math"&gt;\(\hbox{min}\)&lt;/span&gt; and &lt;span class="math"&gt;\(\hbox{max}\)&lt;/span&gt; are the minim and the maximum values of the data. This formula is slightly corrected because if we have
+several values of x with the same index idx, we want them to be evenly distributed inside the range of the bin. So we compute the ratio&lt;/p&gt;
+&lt;div class="math"&gt;
+\begin{equation*}
+\hbox{ratio} = \frac{i - \hbox{hist.cumsum}(\hbox{idx}-1)}{\hbox{hist}[\hbox{idx}]}
+\end{equation*}
+&lt;/div&gt;
+&lt;p&gt;and finally put&lt;/p&gt;
+&lt;div class="math"&gt;
+\begin{equation*}
+x[i] = \hbox{min} + (\hbox{idx} + \hbox{ratio} ) \times \frac{\hbox{max} - \hbox{min}}{n_{bins}}.
+\end{equation*}
+&lt;/div&gt;
+&lt;p&gt;Now we just have to do this for all the i possibles and all the channels. Of course, a simple for loop just won't do if we want to use the GPU to handle all the computations
+quickly (and if we want 1000 iterations we better compute this remapping as quickly as we can). Let's assume we have our input x of size ch (for channels) by a given n (the number
+of activations we keep) and a variable hist_ref of size ch by n_bins (they picked 256 in the paper). Sorting x for each channel and keeping the corresponding mapping is easy with
+pytorch:&lt;/p&gt;
+&lt;pre class="code literal-block"&gt;
+sorted_x, sort_idx = x.data.sort(1)
+&lt;/pre&gt;
+&lt;p&gt;Then we have to adapt our histogram a bit because x and our reference may not have the same number of activations (we removed some style features, the one that appeared more than
+once). So an histogram for x would have a total sum of n, so we just have to compute the sum of each lines in hist_ref.&lt;/p&gt;
+&lt;pre class="code literal-block"&gt;
+hist = hist_ref * n/hist_ref.sum(1).unsqueeze(1)#Normalization between the different lengths of masks.
+cum_ref = hist.cumsum(1)
+cum_prev = torch.cat([torch.zeros(ch,1).cuda(), cum_ref[:,:-1]],1)
+&lt;/pre&gt;
+&lt;p&gt;The cumsums will be used later, and we will need both the cumulative sums of hist_ref and the one that contain the cumulative sums for the previous index. To replace our for loop
+we will create a tensor that contains all the values i from 1 to n. To determine the first index idx such that hist.cumsum(idx) is greater than i, I've used this line:&lt;/p&gt;
+&lt;pre class="code literal-block"&gt;
+rng = torch.arange(1,n+1).unsqueeze(0).cuda()
+idx = (cum_ref.unsqueeze(1) - rng.unsqueeze(2) &amp;lt; 0).sum(2).long()
+&lt;/pre&gt;
+&lt;p&gt;Since all the lines of cum_ref are sorted by ascending values, by subtracting i, the sum over the booleans corresponding to the test cum_ref - i &amp;lt; 0 will give us the first index
+where cum_ref is greater than i. Then we use this tensor idx to get all the values in cum_prev and hist that we will need. Since pytorch doesn't like indexing with a multi-dimensional
+tensor, we have to flatten everything (though that probably won't be needed anymore in pytorch 0.4)&lt;/p&gt;
+&lt;pre class="code literal-block"&gt;
+ymin, ymax = x.data.min(1)[0].unsqueeze(1), x.data.max(1)[0].unsqueeze(1)
+step = (ymax-ymin)/n_bins
+ratio = (rng - cum_prev.view(-1)[idx.view(-1)].view(ch,-1)) / (1e-8 + hist.view(-1)[idx.view(-1)].view(ch,-1))
+ratio = ratio.squeeze().clamp(0,1)
+new_x = ymin + (ratio + idx.float()) * step
+&lt;/pre&gt;
+&lt;p&gt;At this stage new_x contains all the values of our remapping, but they are sorted. We have to use the inverse permutation of the one we applied at the beginning to finish the
+process. To find the inverse permutation I've simply chose to get the arg sort:&lt;/p&gt;
+&lt;pre class="code literal-block"&gt;
+_, remap = sort_idx.sort()
+new_x = new_x.view(-1)[remap.view(-1)].view(ch,-1)
+&lt;/pre&gt;
+&lt;/div&gt;
+&lt;div class="section" id="normalization"&gt;
+&lt;h2&gt;Normalization&lt;/h2&gt;
+&lt;p&gt;In the end, the biggest challenge I faced while working on the implementation of this article is the imbalance between the style features and the input features: in the second
+phase, the mask applied to the style features and the one applied to the input features are different, so the gram matrices we compute from them have different ranges of values. I
+haven't really understood the way the authors of the paper dealt with this in their code so I chose my own approach.&lt;/p&gt;
+&lt;p&gt;If we apply a mask with &lt;span class="math"&gt;\(n_{1}\)&lt;/span&gt; elements for the style features and a mask with &lt;span class="math"&gt;\(n_{2}\)&lt;/span&gt; elements for the input features, I decided to multiply the style features by
+&lt;span class="math"&gt;\(\sqrt{\frac{n_{2}}{n_{1}}}\)&lt;/span&gt; to artificially &lt;em&gt;resize&lt;/em&gt; them. Why? Well the gram matrix is computed by doing a sum, which will either have &lt;span class="math"&gt;\(n_{1}\)&lt;/span&gt; or &lt;span class="math"&gt;\(n_{2}\)&lt;/span&gt;
+elements, of products of two elements of our features. So inside that sum, when we compute the gram matrix of the style features, the square root will disappear and we will
+multiply the result by &lt;span class="math"&gt;\(\frac{n_{2}}{n_{1}}\)&lt;/span&gt;, which is a way to &lt;em&gt;resize&lt;/em&gt; this sum of &lt;span class="math"&gt;\(n_{1}\)&lt;/span&gt; elements to a sum of &lt;span class="math"&gt;\(n_{2}\)&lt;/span&gt; elements.&lt;/p&gt;
+&lt;p&gt;Without this little trick, trainings usually gave me this:&lt;/p&gt;
+&lt;img alt="Histogram matching" class="align-center" src="../images/art8_bug_norm.png" style="width: 600px;" /&gt;
+&lt;p&gt;For the histograms, we also have a resize to do, which is just done by multiplying the histogram of the style features by this ratio &lt;span class="math"&gt;\(\frac{n_{2}}{n_{1}}\)&lt;/span&gt;. Then in the article
+they used the minimum and maximum values of the style features to reconstruct the remapped output features, which didn't make any sense to me, since the histogram loss then compares
+those remapped features to the output features, so I used the minimums and maximums of the output features.&lt;/p&gt;
+&lt;p&gt;At the end, those four losses are summed with some weights to give the final loss of the second stage:&lt;/p&gt;
+&lt;div class="math"&gt;
+\begin{equation*}
+\mathcal{L} = \mathcal{L}_{c} + w_{s} \mathcal{L}_{s} + w_{h} \mathcal{L}_{hist} + w_{tv} \mathcal{L}_{tv}
+\end{equation*}
+&lt;/div&gt;
+&lt;p&gt;where they determine a parameter &lt;span class="math"&gt;\(\tau\)&lt;/span&gt; by training a neural net they call a painting estimator then use&lt;/p&gt;
+&lt;div class="math"&gt;
+\begin{equation*}
+\left \{ \begin{array}{l} w_{s} = \tau \\ w_{tv} = \frac{10 \tau}{(1 + \exp(10^{4} \hbox{mtv} -25))} \\ w_{h} = (10 - w_{tv}) * \tau \end{array} \right .
+\end{equation*}
+&lt;/div&gt;
+&lt;p&gt;I've taken the formulas used in their code, which are different from the ones they put in their article. The quantity mtv is the median of all the variational looses (the things
+we sum to compute TV loss) on the style picture. Of course, the values of tau that worked for them aren't necessarily the best ones since I've used different scaling for the
+losses. There are probably some better values that could be used. I didn't get the histogram loss to show any real contribution to the picture, for instance.&lt;/p&gt;
+&lt;p&gt;Lastly, for the last stage, we use the result from the first stage to compute the remapping but it's slightly better to use the initial input image for the reconstruction
+(which the authors do in their code). See the top of the Eiffel tower here, on the left by reconstructing from the input picture and on the right from the stage one.&lt;/p&gt;
+&lt;img alt="Comparison of inputs for stage 2" class="align-center" src="../images/art8_comp_init.png" style="width: 600px;" /&gt;
+&lt;/div&gt;
+&lt;script type='text/javascript'&gt;if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var align = "center",
+        indent = "0em",
+        linebreak = "false";
+
+    if (false) {
+        align = (screen.width &lt; 768) ? "left" : align;
+        indent = (screen.width &lt; 768) ? "0em" : indent;
+        linebreak = (screen.width &lt; 768) ? 'true' : linebreak;
+    }
+
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
+    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: '"+ align +"'," +
+        "    displayIndent: '"+ indent +"'," +
+        "    showMathMenu: true," +
+        "    messageStyle: 'normal'," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'inherit ! important'} }," +
+        "        linebreaks: { automatic: "+ linebreak +", width: '90% container' }," +
+        "    }, " +
+        "}); " +
+        "if ('default' !== 'default') {" +
+            "MathJax.Hub.Register.StartupHook('HTML-CSS Jax Ready',function () {" +
+                "var VARIANT = MathJax.OutputJax['HTML-CSS'].FONTDATA.VARIANT;" +
+                "VARIANT['normal'].fonts.unshift('MathJax_default');" +
+                "VARIANT['bold'].fonts.unshift('MathJax_default-bold');" +
+                "VARIANT['italic'].fonts.unshift('MathJax_default-italic');" +
+                "VARIANT['-tex-mathit'].fonts.unshift('MathJax_default-italic');" +
+            "});" +
+            "MathJax.Hub.Register.StartupHook('SVG Jax Ready',function () {" +
+                "var VARIANT = MathJax.OutputJax.SVG.FONTDATA.VARIANT;" +
+                "VARIANT['normal'].fonts.unshift('MathJax_default');" +
+                "VARIANT['bold'].fonts.unshift('MathJax_default-bold');" +
+                "VARIANT['italic'].fonts.unshift('MathJax_default-italic');" +
+                "VARIANT['-tex-mathit'].fonts.unshift('MathJax_default-italic');" +
+            "});" +
+        "}";
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+&lt;/script&gt;</content><category term="Deep Learning"></category><category term="Style Transfer"></category></entry><entry><title>Pointer cache for Language Model</title><link href="/pointer-cache-for-language-model.html" rel="alternate"></link><published>2018-04-26T17:43:00-04:00</published><updated>2018-04-26T17:43:00-04:00</updated><author><name>Sylvain Gugger</name></author><id>tag:None,2018-04-26:/pointer-cache-for-language-model.html</id><summary type="html">&lt;p class="first last"&gt;You can easily boost the performance of a language model based on RNNs by adding a pointer cache on top of it. The idea was introduce by Grave et al. and their results showed how this simple technique can make your perplexity decrease by 10 points without additional training. This sounds exciting, so let's see what this is all about and implement that in pytorch with the fastai library.&lt;/p&gt;
+</summary><content type="html">&lt;p&gt;You can easily boost the performance of a language model based on RNNs by adding a pointer cache on top of it. The idea was introduce by Grave et al. in &lt;a class="reference external" href="https://arxiv.org/pdf/1612.04426.pdf"&gt;this article&lt;/a&gt; and their results showed how this simple technique can make your perplexity decrease by 10 points without additional training.
+This sounds exciting, so let's see what this is all about and implement that in pytorch with the fastai library.&lt;/p&gt;
+&lt;div class="section" id="the-pointer-cache"&gt;
+&lt;h2&gt;The pointer cache&lt;/h2&gt;
+&lt;p&gt;To understand the general idea, we have to go back to the basic of a language model built on an RNN.&lt;/p&gt;
+&lt;img alt="An example of RNN" class="align-center" src="../images/art6_rnn.png" style="width: 500px;" /&gt;
+&lt;p&gt;Here our inputs are words, and the outputs our predictions for the newt word to come: &lt;span class="math"&gt;\(o_{1}\)&lt;/span&gt; should be &lt;span class="math"&gt;\(i_{2}\)&lt;/span&gt;, &lt;span class="math"&gt;\(o_{2}\)&lt;/span&gt; should be &lt;span class="math"&gt;\(i_{3}\)&lt;/span&gt; and
+so forth. What's actually inside the black box doesn't matter here, as long as we remember there is a hidden state that will be passed along the way, updated, and used
+to make the next predictions. When the black box is a multiple-layer RNN, what we note &lt;span class="math"&gt;\(h_{t}\)&lt;/span&gt; is the last hidden state (the one from the final layer), which is
+also the one used by the decoder to compute &lt;span class="math"&gt;\(o_{t}\)&lt;/span&gt;.&lt;/p&gt;
+&lt;p&gt;Even if we had some kind of information on all the inputs &lt;span class="math"&gt;\(i_{1},\dots,i_{t}\)&lt;/span&gt; in our hidden state to predict &lt;span class="math"&gt;\(o_{t}\)&lt;/span&gt;, it's all squeezed in the size of that
+hidden state, and if &lt;span class="math"&gt;\(t\)&lt;/span&gt; is large, it has been a long time since we saw the first inputs, so all their context has probably been forgotten by now. The idea behind
+the pointer cache is to use again those inputs to adjust a bit the prediction &lt;span class="math"&gt;\(o_{t}\)&lt;/span&gt;.&lt;/p&gt;
+&lt;img alt="RNN with cache" class="align-center" src="../images/art7_rnn_cache.png" style="width: 600px;" /&gt;
+&lt;p&gt;More precisely, when trying to predict &lt;span class="math"&gt;\(o_{t}\)&lt;/span&gt;, we take a look at all the previous couples &lt;span class="math"&gt;\((h_{1},i_{2}),\dots,(h_{t-1},i_{t})\)&lt;/span&gt;. The hidden state &lt;span class="math"&gt;\(h_{1}\)&lt;/span&gt;
+was supposed to predict &lt;span class="math"&gt;\(i_{2}\)&lt;/span&gt;, the hidden state &lt;span class="math"&gt;\(h_{2}\)&lt;/span&gt; was supposed to predict &lt;span class="math"&gt;\(i_{3}\)&lt;/span&gt; and so forth. If the hidden state we have right now, &lt;span class="math"&gt;\(h_{t}\)&lt;/span&gt;
+&lt;em&gt;looks a lot like&lt;/em&gt; one of the previous hidden state &lt;span class="math"&gt;\(h_{k}\)&lt;/span&gt;, well maybe the word we are trying to predict is the same as &lt;span class="math"&gt;\(h_{k}\)&lt;/span&gt; was supposed to, and we know that
+word is &lt;span class="math"&gt;\(i_{k+1}\)&lt;/span&gt;, so we should boost the probability of this word in our output &lt;span class="math"&gt;\(o_{t}\)&lt;/span&gt;.&lt;/p&gt;
+&lt;p&gt;That's the main idea behind this pointer cache technique: we really want to predict the same word as that previous hidden state, so we point at it. The cache is just that instead
+of looking through the history since the beginning, we only take a window of a certain length &lt;span class="math"&gt;\(n\)&lt;/span&gt;, so we look back at the &lt;span class="math"&gt;\(n\)&lt;/span&gt; previous couples &lt;span class="math"&gt;\((h_{k},i_{k+1})\)&lt;/span&gt;.&lt;/p&gt;
+&lt;p&gt;There is just one thing to clarify: how does one code this &lt;em&gt;looks a lot like&lt;/em&gt; thing. We simply take the dot product of &lt;span class="math"&gt;\(h_{t}\)&lt;/span&gt; with &lt;span class="math"&gt;\(h_{i}\)&lt;/span&gt; (which is the exact same
+idea as the one we saw in style transfer during the last lesson of &lt;a class="reference external" href="http://fast.ai"&gt;fast.ai&lt;/a&gt;). The dot product will be very high if the coordinates of &lt;span class="math"&gt;\(h_{t}\)&lt;/span&gt; and &lt;span class="math"&gt;\(h_{i}\)&lt;/span&gt; are very high together or very low (aka very high negatives) together
+so it gives us a sense of how much they are similar.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section" id="from-the-math"&gt;
+&lt;h2&gt;From the math...&lt;/h2&gt;
+&lt;p&gt;This is why in the article mentioned earlier, they come up with the formula:&lt;/p&gt;
+&lt;div class="math"&gt;
+\begin{equation*}
+p_{cache}(w | h_{1..t} x_{1..t}) \propto \sum_{i=1}^{t-1} \text{𝟙}_{\{w = x_{i+1}\}} \exp(\theta h_{t}^{T} h_{i})
+\end{equation*}
+&lt;/div&gt;
+&lt;p&gt;It looks a lot more complicated but there is not much more than what I explained before in this line. Let's break it down in bits!&lt;/p&gt;
+&lt;p&gt;The first part is the &lt;span class="math"&gt;\(p_{cache}(w | h_{1..t} x_{1..t})\)&lt;/span&gt;. It represents a probability, more specifically a probability to have the word &lt;span class="math"&gt;\(w\)&lt;/span&gt; while
+knowing &lt;span class="math"&gt;\(h_{1..t} x_{1..t}\)&lt;/span&gt;, which is a shorter way of writing &lt;span class="math"&gt;\(h_{1},\dots,h_{t},x_{1},\dots,x_{t}\)&lt;/span&gt;. The &lt;span class="math"&gt;\(h_{k}\)&lt;/span&gt; are the hidden states and the &lt;span class="math"&gt;\(x_{k}\)&lt;/span&gt; the
+inputs (what I called &lt;span class="math"&gt;\(i_{k}\)&lt;/span&gt; because input doesn't begin with an x). So this whole thing is just a fancy way of writing what is our desired output: a vector that will
+contain the probabilities that the next word is &lt;span class="math"&gt;\(w\)&lt;/span&gt; knowing all the previous inputs and hidden states.&lt;/p&gt;
+&lt;p&gt;Then there is this weird symbol &lt;span class="math"&gt;\(\propto\)&lt;/span&gt; (which I honestly didn't know). While looking it up to type the formula, I found this &lt;a class="reference external" href="http://detexify.kirelabs.org/classify.html"&gt;very cool website&lt;/a&gt; where you can draw a mathematical symbol, and it will spit you its LaTeX code, and a google search of it will probably give you
+all the information you need to understand its meaning. Hope this trick can help you in breaking down future formulas.&lt;/p&gt;
+&lt;p&gt;Anyway, they don't use the equal sign but this &lt;em&gt;proportional to&lt;/em&gt; because since we want a probability, we will have to have things that add up to one in the end. They don't want to
+bother with it for now, so this is just a way of saying: we'll give that value, and at the end, divide by the sum of all of those so we're sure it adds up to one.&lt;/p&gt;
+&lt;p&gt;Then comes a sum, going from 1 to &lt;span class="math"&gt;\((t-1)\)&lt;/span&gt;, that just means we look at all our previous hidden states. All? Not really, cause this weird 𝟙 with a double bar is an indicator
+function. Though more than its name, you're probably more interested in what it does. So when we have a 𝟙 like this, there is a condition written in index (here
+&lt;span class="math"&gt;\(\{w = x_{i+1}\}\)&lt;/span&gt;) and the quantity is equal to 1 when the condition is true, 0 when the condition is false. So we're not summing over all the previous states, but only
+those who respect that condition, aka the ones where &lt;span class="math"&gt;\(x_{i+1}\)&lt;/span&gt; (which is the word we were trying to predict) is the same as &lt;span class="math"&gt;\(w\)&lt;/span&gt; (the word we want to assign a
+probability now).&lt;/p&gt;
+&lt;p&gt;Let's sum up until know: to assign a probability to this word w, let's look back at all the previous states where we trying to predict w. Now for all of those states, we compute
+the quantity &lt;span class="math"&gt;\(\exp(\theta h_{t}^{T} h_{i})\)&lt;/span&gt;. Here &lt;span class="math"&gt;\(h_{t}^{T}h_{i}\)&lt;/span&gt; is another way to write the dot product of &lt;span class="math"&gt;\(h_{t}\)&lt;/span&gt; and  &lt;span class="math"&gt;\(h_{i}\)&lt;/span&gt;, which we already
+established is a measure of how much &lt;span class="math"&gt;\(h_{t}\)&lt;/span&gt; and  &lt;span class="math"&gt;\(h_{i}\)&lt;/span&gt; look a like. We multiply this by an hyper-parameter &lt;span class="math"&gt;\(\theta\)&lt;/span&gt; and then take the exponential of it.&lt;/p&gt;
+&lt;p&gt;Why the exponential? Remember the little bit with the weird symbol &lt;span class="math"&gt;\(\propto\)&lt;/span&gt;, we will have to divide by the sum of everything at the end. Taking exponentials of quantities
+then divide by the sum of them all... this should remind you of something. That's right, a softmax! For one, this will insure that all our probabilities add up to one, but
+mostly, it will make one of them stand out more than the others, because that's what softmax does. In the end, it'll help us point at one specific previous hidden state, the one
+that looks the most like the one we have.&lt;/p&gt;
+&lt;p&gt;So in the end, we compute the softmax s of &lt;span class="math"&gt;\(\theta h_{1} \cdot h_{t}, \dots, \theta h_{t-1} \cdot h_{t}\)&lt;/span&gt; and attribute to &lt;span class="math"&gt;\(p_{cache}(w)\)&lt;/span&gt; the sum of all the
+coordinates of s corresponding to hidden state &lt;span class="math"&gt;\(h_{i}\)&lt;/span&gt; where we were trying to predict &lt;span class="math"&gt;\(w\)&lt;/span&gt;.&lt;/p&gt;
+&lt;p&gt;There is just one last step, but it's an easy one. Our final probability for the word w is&lt;/p&gt;
+&lt;div class="math"&gt;
+\begin{equation*}
+p(w) = (1-\lambda)p_{vocab}(w) + \lambda p_{cache}(w).
+\end{equation*}
+&lt;/div&gt;
+&lt;p&gt;I removed all the &lt;span class="math"&gt;\(| h_{1..t} x_{1..t}\)&lt;/span&gt; because they aren't really useful. So our final probability is a blend between this &lt;span class="math"&gt;\(p_{cache}(w)\)&lt;/span&gt; we just computed and
+&lt;span class="math"&gt;\(p_{vocab}(w)\)&lt;/span&gt;, which is their notation for the probabilities in our output &lt;span class="math"&gt;\(o_{t}\)&lt;/span&gt;, and we have another hyper-parameter &lt;span class="math"&gt;\(\lambda\)&lt;/span&gt; that will decide how much
+of the cache we take, and how much of the output of our RNN.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section" id="to-the-code"&gt;
+&lt;h2&gt;...to the code&lt;/h2&gt;
+&lt;p&gt;Now that we have completely explained the formula, let's see how we code this. Let's say, at a given point where we have to give the probabilities for each word, we
+have:&lt;/p&gt;
+&lt;ul class="simple"&gt;
+&lt;li&gt;our output of the network (softmaxed) in a torch vector named pv&lt;/li&gt;
+&lt;li&gt;the current hidden state in a torch vector named hidden&lt;/li&gt;
+&lt;li&gt;our cache of hidden states in a torch Tensor called hid_state&lt;/li&gt;
+&lt;li&gt;our cache of targets in a torch Tensor called targ_cache.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Then first we take all the dot products between the hidden states in our cache and the current hidden state:&lt;/p&gt;
+&lt;pre class="code python literal-block"&gt;
+&lt;span class="n"&gt;all_dot_prods&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;torch&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;mv&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;theta&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;hid_cache&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;hiddens&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;])&lt;/span&gt;
+&lt;/pre&gt;
+&lt;p&gt;The torch command mv is applying directly the dot product between each line of hid_cache and the vector hiddens[i]. Then we softmax this:&lt;/p&gt;
+&lt;pre class="code python literal-block"&gt;
+&lt;span class="n"&gt;softmaxed&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;F&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;softmax&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;all_dot_prods&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;
+&lt;p&gt;Then we want, for each word w, to take the sum of all the probabilities corresponding to states where we had to predict w. To do this, I used the same trick as the implementation
+of Stephen Merity et al. &lt;a class="reference external" href="https://github.com/salesforce/awd-lstm-lm"&gt;here on github&lt;/a&gt;. If we consider the targets are one-hot encoded, we just have to to expand our softmaxed vector (which as the size of our cache)
+on the first dimension to have vocab_size lines, then we multiply it by targ_cache (which will zero all the things we don't want) and sum over the first axis. All of
+this is done with:&lt;/p&gt;
+&lt;pre class="code python literal-block"&gt;
+&lt;span class="n"&gt;softmaxed&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;F&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;softmax&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;all_dot_prods&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;unsqueeze&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="n"&gt;p_cache&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;softmaxed&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;expand_as&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;targ_cache&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;targ_cache&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;sum&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;squeeze&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+&lt;/pre&gt;
+&lt;p&gt;Then our final predictions are given by&lt;/p&gt;
+&lt;pre class="code python literal-block"&gt;
+&lt;span class="n"&gt;p&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="n"&gt;lambd&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;pv&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;lambd&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="n"&gt;p_cache&lt;/span&gt;
+&lt;/pre&gt;
+&lt;p&gt;and the associated CrossEntropy Loss is given by&lt;/p&gt;
+&lt;pre class="code python literal-block"&gt;
+&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="n"&gt;torch&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;log&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;p&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;target&lt;/span&gt;&lt;span class="p"&gt;])&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;data&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+&lt;/pre&gt;
+&lt;p&gt;if the current target is named target.&lt;/p&gt;
+&lt;p&gt;With all of this, we're ready to fully code the cache pointer and I've done an implementation relying on the &lt;a class="reference external" href="https://github.com/fastai/fastai"&gt;fastai library&lt;/a&gt; that you can find in &lt;a class="reference external" href="https://github.com/sgugger/Deep-Learning/blob/master/Cache%20pointer.ipynb"&gt;this notebook&lt;/a&gt;. As an example, the model I provide for testing goes from a perplexity of 74.06 to 54.43.&lt;/p&gt;
+&lt;/div&gt;
+&lt;script type='text/javascript'&gt;if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var align = "center",
+        indent = "0em",
+        linebreak = "false";
+
+    if (false) {
+        align = (screen.width &lt; 768) ? "left" : align;
+        indent = (screen.width &lt; 768) ? "0em" : indent;
+        linebreak = (screen.width &lt; 768) ? 'true' : linebreak;
+    }
+
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
+    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: '"+ align +"'," +
+        "    displayIndent: '"+ indent +"'," +
+        "    showMathMenu: true," +
+        "    messageStyle: 'normal'," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'inherit ! important'} }," +
+        "        linebreaks: { automatic: "+ linebreak +", width: '90% container' }," +
+        "    }, " +
+        "}); " +
+        "if ('default' !== 'default') {" +
+            "MathJax.Hub.Register.StartupHook('HTML-CSS Jax Ready',function () {" +
+                "var VARIANT = MathJax.OutputJax['HTML-CSS'].FONTDATA.VARIANT;" +
+                "VARIANT['normal'].fonts.unshift('MathJax_default');" +
+                "VARIANT['bold'].fonts.unshift('MathJax_default-bold');" +
+                "VARIANT['italic'].fonts.unshift('MathJax_default-italic');" +
+                "VARIANT['-tex-mathit'].fonts.unshift('MathJax_default-italic');" +
+            "});" +
+            "MathJax.Hub.Register.StartupHook('SVG Jax Ready',function () {" +
+                "var VARIANT = MathJax.OutputJax.SVG.FONTDATA.VARIANT;" +
+                "VARIANT['normal'].fonts.unshift('MathJax_default');" +
+                "VARIANT['bold'].fonts.unshift('MathJax_default-bold');" +
+                "VARIANT['italic'].fonts.unshift('MathJax_default-italic');" +
+                "VARIANT['-tex-mathit'].fonts.unshift('MathJax_default-italic');" +
+            "});" +
+        "}";
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+&lt;/script&gt;</content><category term="Deep Learning"></category><category term="NLP"></category></entry><entry><title>The 1cycle policy</title><link href="/the-1cycle-policy.html" rel="alternate"></link><published>2018-04-07T15:23:00-04:00</published><updated>2018-04-07T15:23:00-04:00</updated><author><name>Sylvain Gugger</name></author><id>tag:None,2018-04-07:/the-1cycle-policy.html</id><summary type="html">&lt;p class="first last"&gt;Properly setting the hyper-parameters of a neural network can be challenging, fortunately, there are some recipe that can help.&lt;/p&gt;
+</summary><content type="html">&lt;p&gt;Here, we will dig into the &lt;a class="reference external" href="https://arxiv.org/abs/1803.09820"&gt;first part&lt;/a&gt; of Leslie Smith's work about setting hyper-parameters (namely learning rate, momentum and weight decay). In particular, his 1cycle policy
+gives very fast results to train complex models. As an example, we'll see how it allows us to train a resnet-56 on cifar10 to the same or a better precision than the authors in
+&lt;a class="reference external" href="https://arxiv.org/abs/1512.03385"&gt;their original paper&lt;/a&gt; but with far less iterations.&lt;/p&gt;
+&lt;p&gt;By training with high learning rates we can reach a model that gets &lt;strong&gt;93% accuracy in 70 epochs&lt;/strong&gt; which is less than
+7k iterations (as opposed to the 64k iterations which made roughly 360 epochs in the original paper).&lt;/p&gt;
+&lt;p&gt;&lt;a class="reference external" href="https://github.com/sgugger/Deep-Learning/blob/master/Cyclical%20LR%20and%20momentums.ipynb"&gt;This notebook&lt;/a&gt; contains all the experiments.
+They are done with the same data-augmentation as in this original paper with one minor tweak: we random flip the picture horizontally and a random crop after adding a padding of
+4 pixels on each side. The minor tweak is that we don't color the padded pixels in black, but use a reflection padding, since it's the one implemented
+in the fastai library. This is probably why we get slightly better results than Leslie when doing the experiments with the same hyper-parameters.&lt;/p&gt;
+&lt;div class="section" id="using-high-learning-rates"&gt;
+&lt;h2&gt;Using high learning rates&lt;/h2&gt;
+&lt;p&gt;We have already seen how to implement the &lt;a class="reference external" href="/how-do-you-find-a-good-learning-rate.html"&gt;learning rate finder&lt;/a&gt;. Begin to train the model while increasing the learning rate from
+a very low to a very large one, stop when the loss starts to really get out of control. Plot the losses against the learning rates and pick a value a bit before the minimum,
+where the loss still improves. Here for instance, anything between &lt;span class="math"&gt;\(10^{-2}\)&lt;/span&gt; and &lt;span class="math"&gt;\(3 \times 10^{-2}\)&lt;/span&gt; seems like a good idea.&lt;/p&gt;
+&lt;img alt="An example of curve when finder the learning rate" class="align-center" src="../images/art2_courbe_lr.png" style="width: 400px;" /&gt;
+&lt;p&gt;This was already an idea of the same author and he completes it in his &lt;a class="reference external" href="https://arxiv.org/abs/1803.09820"&gt;last article&lt;/a&gt; with a good approach to adopt during training.&lt;/p&gt;
+&lt;p&gt;He recommends to do a cycle with two steps of equal lengths, one going from a lower learning rate to a higher one than go back to the minimum. The maximum should be the value picked
+with the Learning Rate Finder, and the lower one can be ten times lower. Then, the length of this cycle should be slightly less than the total number of epochs, and, in the last
+part of training, we should allow the learning rate to decrease more than the minimum, by several orders of magnitude.&lt;/p&gt;
+&lt;img alt="Learning rates to use in a cycle" class="align-center" src="../images/art5_lr_schedule.png" style="width: 400px;" /&gt;
+&lt;p&gt;The idea of starting slower isn't new: using a lower value to warm-up the training is often done, and this is exactly what the first part is achieving. Leslie doesn't recommend
+to switch to a higher value directly, however, but to rather slowly go there linearly, and to take as much time going up as going down.&lt;/p&gt;
+&lt;p&gt;What he observed during his experiments is that the during the middle of the cycle, the high learning rates will act as regularization method, and keep the network from overfitting.
+They will prevent the model to land in a steep area of the loss function, preferring to find a minimum that is flatter. He explained in &lt;a class="reference external" href="https://arxiv.org/abs/1708.07120"&gt;this other paper&lt;/a&gt; how he observed that by using this policy, approximates of the hessian were lower, indicating that the SGD was finding a wider flat area.&lt;/p&gt;
+&lt;p&gt;Then the last part of the training, with descending learning rates up until annihilation will allow us to go inside a steeper local minimum inside that smoother part. During the
+par with high learning rates, we don't see substantial improvements in the loss or the accuracy, and the validation loss sometimes spikes very high, but we see all the benefits
+of doing this when we finally lower the learning rates at the end.&lt;/p&gt;
+&lt;img alt="Losses during a full cycle" class="align-center" src="../images/art5_losses.png" style="width: 400px;" /&gt;
+&lt;p&gt;In this graph, the learning rate was rising from 0.08 to 0.8 between epochs 0 and 41, getting back to 0.08 between epochs 41 and 82 then going to one hundredth of 0.08 in the last
+few epochs. We can see how the validation loss gets a little bit more volatile during the high learning rate part of the cycle (epochs 20 to 60 mostly) but the important part is
+that on average, the distance between the training loss and the validation loss doesn't increase. We only really start to overfit at the end of the cycle, when the learning rate
+gets annihilated.&lt;/p&gt;
+&lt;p&gt;Surprisingly, applying this policy even allows us to pick larger maximum learning rates, closer to the minimum of the plot we draw when using the learning rate finder. Those
+trainings are a bit more dangerous in the sense that the loss can go too far away and make the whole thing diverge. In those cases, it can be worth to try with a longer cycle before going
+to a slower learning rate, since a long warm-up seems to help.&lt;/p&gt;
+&lt;img alt="Losses during a full cycle" class="align-center" src="../images/art5_superconvergence.png" style="width: 400px;" /&gt;
+&lt;p&gt;In this graph, the learning rate was rising from 0.15 to 3 between epochs 0 and 22.5, getting back to 0.15 between epochs 22.5 and 45 then going to one hundredth of 0.15 in the last
+few epochs. With very high learning rates, we get to learn faster &lt;strong&gt;and&lt;/strong&gt; prevent overfitting. The difference between the validation loss and the training loss stays extremely low
+up until we annihilate the learning rates. This is the phenomenon Leslie Smith describes as super convergence.&lt;/p&gt;
+&lt;p&gt;With this technique, we can train a resnet-56 to have 92.3% accuracy on cifar10 in barely 50 epochs. Going to a cycle of 70 epochs gets us at 93% accuracy.&lt;/p&gt;
+&lt;p&gt;By opposition, a smaller cycle followed by a longer annihilation will result in something like this:&lt;/p&gt;
+&lt;img alt="An example of overfitting" class="align-center" src="../images/art5_overfitting.png" style="width: 400px;" /&gt;
+&lt;p&gt;Here our two steps end at epoch 42 and the rest of the training is spent with a learning rate slowly decreasing. The validation loss stops decreasing causing bigger and bigger
+overfitting, and the accuracy barely gets up.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section" id="cyclical-momentum"&gt;
+&lt;h2&gt;Cyclical momentum&lt;/h2&gt;
+&lt;p&gt;To accompany the movement toward larger learning rates, Leslie found in his experiments that decreasing the momentum led to better results. This supports the intuition that in
+that part of the training, we want the SGD to quickly go in new directions to find a flatter area, so the new gradients need to be given more weight. In practice, he recommends
+to pick two values likes 0.85 and 0.95, and decrease from the higher one to the lower one when we increase the learning rate, then go back to the higher momentum as the learning
+rate goes down.&lt;/p&gt;
+&lt;img alt="Learning rate and momentum schedule" class="align-center" src="../images/art5_full_schedule.png" style="width: 600px;" /&gt;
+&lt;p&gt;According to Leslie, the exact best value of momentum chosen during the whole training can give us the same final results, but using cyclical momentums removes the hassle of trying multiple values
+and running several full cycles, losing precious time.&lt;/p&gt;
+&lt;p&gt;Even if using cyclical momentum always gave slightly better results, I didn't find the same gap as in the paper between using a constant momentum and cyclical ones.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="section" id="all-the-other-parameters-matter"&gt;
+&lt;h2&gt;All the other parameters matter&lt;/h2&gt;
+&lt;p&gt;The way we tune all the other hyper-parameters of the model will impact the best learning rate. That's why when we run the Learning Rate Finder, it's very important to use it
+with the exact same conditions as during our training. For instance different batch sizes or weight decays will impact the results:&lt;/p&gt;
+&lt;img alt="LR Finder for various weight decay values" class="align-center" src="../images/art5_wds.png" style="width: 400px;" /&gt;
+&lt;p&gt;This can be useful to set some hyper-parameters. For instance, with weight decay, Leslie's advice is to run the learning rate finder
+for a few values of weight decay, and pick the largest one that will still let us train at a high maximum learning rate. This is how we can come up with the &lt;span class="math"&gt;\(10^{-4}\)&lt;/span&gt; used
+in our experiments.&lt;/p&gt;
+&lt;p&gt;In his opinion, the batch size should be set to the highest possible value to fit in the available memory. Then the other hyper-parameters we may have (dropout for instance) can
+be tuned the same way as weight decay, or just by trying on a cycle and see the results they give. The only thing is to never forget to re-run the Learning Rate Finder, especially
+when deciding to pick a strategy with an aggressive learning rate close to the maximum possible value.&lt;/p&gt;
+&lt;p&gt;Training with the 1cycle policy at high learning rates is a method of regularization in itself, so we shouldn't be surprised if we have to reduce the other forms of regularization
+we were previously using when we put it in place. It will however be more efficient, since we can train for a long time at large learning rates.&lt;/p&gt;
+&lt;/div&gt;
+&lt;script type='text/javascript'&gt;if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var align = "center",
+        indent = "0em",
+        linebreak = "false";
+
+    if (false) {
+        align = (screen.width &lt; 768) ? "left" : align;
+        indent = (screen.width &lt; 768) ? "0em" : indent;
+        linebreak = (screen.width &lt; 768) ? 'true' : linebreak;
+    }
+
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
+    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: '"+ align +"'," +
+        "    displayIndent: '"+ indent +"'," +
+        "    showMathMenu: true," +
+        "    messageStyle: 'normal'," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'inherit ! important'} }," +
+        "        linebreaks: { automatic: "+ linebreak +", width: '90% container' }," +
+        "    }, " +
+        "}); " +
+        "if ('default' !== 'default') {" +
+            "MathJax.Hub.Register.StartupHook('HTML-CSS Jax Ready',function () {" +
+                "var VARIANT = MathJax.OutputJax['HTML-CSS'].FONTDATA.VARIANT;" +
+                "VARIANT['normal'].fonts.unshift('MathJax_default');" +
+                "VARIANT['bold'].fonts.unshift('MathJax_default-bold');" +
+                "VARIANT['italic'].fonts.unshift('MathJax_default-italic');" +
+                "VARIANT['-tex-mathit'].fonts.unshift('MathJax_default-italic');" +
+            "});" +
+            "MathJax.Hub.Register.StartupHook('SVG Jax Ready',function () {" +
+                "var VARIANT = MathJax.OutputJax.SVG.FONTDATA.VARIANT;" +
+                "VARIANT['normal'].fonts.unshift('MathJax_default');" +
+                "VARIANT['bold'].fonts.unshift('MathJax_default-bold');" +
+                "VARIANT['italic'].fonts.unshift('MathJax_default-italic');" +
+                "VARIANT['-tex-mathit'].fonts.unshift('MathJax_default-italic');" +
+            "});" +
+        "}";
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+&lt;/script&gt;</content><category term="Deep Learning"></category><category term="SGD"></category><category term="Learning Rate"></category></entry></feed>
