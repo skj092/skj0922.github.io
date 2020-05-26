@@ -1,0 +1,238 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link href='//fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,700,400italic' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="/theme/stylesheet/style.min.css">
+  <link rel="stylesheet" type="text/css" href="/theme/pygments/github.min.css">
+  <link rel="stylesheet" type="text/css" href="/theme/font-awesome/css/font-awesome.min.css">
+
+
+    <link href="/feeds/all.atom.xml" type="application/atom+xml" rel="alternate" title="Another data science student's blog Atom">
+
+    <link href="/feeds/all.rss.xml" type="application/rss+xml" rel="alternate" title="Another data science student's blog RSS">
+
+
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="HandheldFriendly" content="True" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="" />
+
+
+    <meta name="author" content="Sonu Jha" />
+    <meta name="description" content="" />
+<meta property="og:site_name" content="Another data science student's blog"/>
+<meta property="og:type" content="blog"/>
+<meta property="og:title" content="Another data science student's blog"/>
+<meta property="og:description" content=""/>
+<meta property="og:locale" content="en_US"/>
+<meta property="og:url" content=""/>
+<meta property="og:image" content="/images/profile.jpg">
+
+  <title>Another data science student's blog &ndash; About Me</title>
+
+</head>
+<body>
+  <aside>
+    <div>
+      <a href="https://skj092.github.io">
+        <img src="/images/profile.png" alt="Sonu Jha" title="Sonu Jha">
+      </a>
+      <h1><a href="https://skj092.github.io">Sonu Jha</a></h1>
+
+
+      <nav>
+        <ul class="list">
+          <li><a href="/pages/about-me.html#about-me">About Me</a></li>
+        </ul>
+      </nav>
+
+      <ul class="social">
+        <li><a class="sc-linkedin" href="https://www.linkedin.com/in/sonu-jha-15022916b/" target="_blank"><i class="fa fa-linkedin"></i></a></li>
+        <li><a class="sc-github" href="https://github.com/skj092" target="_blank"><i class="fa fa-github"></i></a></li>
+        <li><a class="sc-twitter" href="https://twitter.com/Sonu_Kumar_Jha" target="_blank"><i class="fa fa-twitter"></i></a></li>
+      </ul>
+    </div>
+
+
+  </aside>
+  <main>
+
+    <nav>
+      <a href="https://skj092.github.io">    Home
+</a>
+      <a href="/feeds/all.atom.xml">    Atom
+</a>
+
+      <a href="/feeds/all.rss.xml">    RSS
+</a>
+    </nav>
+
+<article class="single">
+  <header>
+    <h1 id="sgd-variants">Pytorch : Pytorch: Your Favourite Deep Learning Library</h1>
+    <p>Some most common operation using Pytorch</p>
+  </header>
+
+  <div>
+    <p>Pytorch is an open source machine learning library probably easiest to start with. It is built by Facebook.
+        In this notebook I will write and discuss five most common and important functions in pytorch.</p>
+      <ul>
+          <li><b>Function 1</b>: torch.transpose()</li>
+          <li><b>Function 2</b>: torch.stack()</li>
+          <li><b>Function 3</b>: torch.where()</li>
+          <li><b>Function 4</b>: torch.backward()</li>
+          <li><b>Function 5</b>: torch.add()</li>
+      </ul>
+<img alt="torch" class="align-left" src="../images/torch.png" style="width: 300px;" />
+<div class="section" id="vanilla-sgd">
+
+<h2>Function 1 - transpose()</h2>
+<p>In linear algebra, the transpose of a matrix is an operator which flips a matrix over its diagonal, that is it switches
+    the row and column indices of the matrix by producing. Here we will transpose tensor using pytorch transpose function</p>
+    <img alt="t1" class="align-left" src="../images/t1.jpg" style="width: 300px;" />
+ <p>x is a 2-D tensor. we swapped dimension 0 to dimension 1 using torch.transpose()</p>
+    <img alt="t2" class="align-left" src="../images/t2.pmg" style="width: 300px;" />
+    <p>we swapped dimension 1 to dimension 0.</p>
+    <img alt="t3" class="align-left" src="../images/t3.png" style="width: 300px;" />
+    <p>we need to put the dimension which is going to be swapped without. And if we put same dimension twice it has no effect.</p>
+    <p>Transpose function is very useful while matrix multiplication</p>
+
+<h2>Function 2 - stack()</h2>
+    <p>This function conconate every new tensor in new dimension. It add every new tensor to additional dimension</p>
+    <img alt="s1" class="align-left" src="../images/s1.png" style="width: 300px;" />
+ <p>Here we stacked b over a and created an additional dimesion.</p>
+    <img alt="s2" class="align-left" src="../images/s2.png" style="width: 300px;" />
+    <p>Here b is the stack of 3 a tensor</p>
+    <img alt="s3" class="align-left" src="../images/s3.png" style="width: 300px;" />
+    <p>To make an stack, all tensors need to be in equal size.</p>
+    <p>while working with image data stack function is useful to numerical calculation.
+        Like to calculate statistical values like mean, median, etc. Stacking makes easy to calculate all of these.</p>
+
+<h2>Function 3 - where()</h2>
+    <p>Returns tensor of element with given condition</p>
+    <img alt="w1" class="align-left" src="../images/w1.png" style="width: 300px;" />
+ <p>Explanation about example</p>
+    <img alt="w2" class="align-left" src="../images/w2.png" style="width: 300px;" />
+    <p>here we find the difference between x and y. This function can be used as a loss function in binary classification
+        problems, where the target variable is similar like x and predicted value like y.</p>
+    <img alt="w3" class="align-left" src="../images/w3.png" style="width: 300px;" />
+    <p>If if size of y is less then x then pytorch automatically expand y to the size of x without additional memory.
+        However if the size of y is greater then x, the it doesn't work.</p>
+    <p>This function can be used as a loss function in binary classification problems.</p>
+
+<h2>Function 4 - backword()</h2>
+    <p>This function is most important function in mathine leanring. It calculate the gradient of a function.</p>
+    <img alt="b1" class="align-left" src="../images/b1.png" style="width: 300px;" />
+ <p>y = x^2 dy/dx = 2xdy/dx(x=4) = 2*4 =8</p>
+    <img alt="b2" class="align-left" src="../images/b2.png" style="width: 300px;" />
+    <p>y = x**2 dy/dx = 2*x x.grad = dy/dx(x==1), dy/dx(x==2), dy/dx(x==3) x.grad = 2, 4, 6 </p>
+    <img alt="b3" class="align-left" src="../images/b3.png" style="width: 300px;" />
+    <p>To calculate gradient we need to set requires_grad = True.</p>
+    <p>While updating the weight in gradient descent backword function is used to update the weight.</p>
+
+<h2>Function 5 - add()</h2>
+<p>To add two tensor</p>
+    <img alt="a1" class="align-left" src="../images/a1.png" style="width: 300px;" />
+ <p>Here add function just work like + operator.</p>
+    <img alt="a2" class="align-left" src="../images/a2.png" style="width: 300px;" />
+    <p>As you can see above the size of y is not the size of x. But pytorch expand the size of y by replacating
+        its data and do elementwise operation.</p>
+    <img alt="a3" class="align-left" src="../images/a3.png" style="width: 300px;" />
+    <p>Here the size of y is greator then the size of x but x doesn't expand. Pytorch expand in every dimension,
+        if it increase the dimension of x then it will become 3*3 still doesn't match the size of y.</p>
+    <p>It is very helpful while doing tensor operation. Additional operator is one of the most used operator</p>
+
+<h2>conclusion</h2>
+    <p>We have covered five most useful pytorch function. Go the the pytorch documentation and write five function of your choice.</p>
+
+    <h2>Reference Links</h2>
+    <p>Official documentation for torch.Tensor: https://pytorch.org/docs/stable/tensors.html</p>
+    <p>Official documentation for torch.Tensor: https://pytorch.org/docs/stable/tensors.html</p>
+
+</div>
+
+<script type='text/javascript'>if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var align = "center",
+        indent = "0em",
+        linebreak = "false";
+
+    if (false) {
+        align = (screen.width < 768) ? "left" : align;
+        indent = (screen.width < 768) ? "0em" : indent;
+        linebreak = (screen.width < 768) ? 'true' : linebreak;
+    }
+
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
+    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: '"+ align +"'," +
+        "    displayIndent: '"+ indent +"'," +
+        "    showMathMenu: true," +
+        "    messageStyle: 'normal'," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'inherit ! important'} }," +
+        "        linebreaks: { automatic: "+ linebreak +", width: '90% container' }," +
+        "    }, " +
+        "}); " +
+        "if ('default' !== 'default') {" +
+            "MathJax.Hub.Register.StartupHook('HTML-CSS Jax Ready',function () {" +
+                "var VARIANT = MathJax.OutputJax['HTML-CSS'].FONTDATA.VARIANT;" +
+                "VARIANT['normal'].fonts.unshift('MathJax_default');" +
+                "VARIANT['bold'].fonts.unshift('MathJax_default-bold');" +
+                "VARIANT['italic'].fonts.unshift('MathJax_default-italic');" +
+                "VARIANT['-tex-mathit'].fonts.unshift('MathJax_default-italic');" +
+            "});" +
+            "MathJax.Hub.Register.StartupHook('SVG Jax Ready',function () {" +
+                "var VARIANT = MathJax.OutputJax.SVG.FONTDATA.VARIANT;" +
+                "VARIANT['normal'].fonts.unshift('MathJax_default');" +
+                "VARIANT['bold'].fonts.unshift('MathJax_default-bold');" +
+                "VARIANT['italic'].fonts.unshift('MathJax_default-italic');" +
+                "VARIANT['-tex-mathit'].fonts.unshift('MathJax_default-italic');" +
+            "});" +
+        "}";
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+</script>
+  </div>
+
+
+
+
+</article>
+
+        <footer>
+<p>&copy; Sonu Jha </p>
+<p>Powered by <a href="http://getpelican.com" target="_blank">Pelican</a> -
+    <a href="https://github.com/alexandrevicenzi/flex" target="_blank">Flex</a>
+    theme by <a href="http://alexandrevicenzi.com" target="_blank">Alexandre Vicenzi</a>
+</p>    </footer>
+  </main>
+
+
+<script type="application/ld+json">
+{
+  "@context" : "http://schema.org",
+  "@type" : "Blog",
+  "name": " Another data science student's blog ",
+  "url" : "",
+  "image": "/images/profile.jpg",
+  "description": ""
+}
+</script>
+</body>
+</html>
