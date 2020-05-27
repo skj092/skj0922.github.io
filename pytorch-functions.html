@@ -71,7 +71,7 @@
 
 <article class="single">
   <header>
-    <h1 id="sgd-variants">Pytorch : Pytorch: Your Favourite Deep Learning Library</h1>
+    <h1 id="pytorch-functions">Pytorch : Pytorch: Your Favourite Deep Learning Library</h1>
     <p>Some most common operation using Pytorch</p>
   </header>
 
@@ -85,61 +85,76 @@
           <li><b>Function 4</b>: torch.backward()</li>
           <li><b>Function 5</b>: torch.add()</li>
       </ul>
-<img alt="torch" class="align-left" src="../images/torch.png" style="width: 300px;" />
+<img alt="torch" class="align-left" src="../images/torch.png" />
 <div class="section" id="vanilla-sgd">
 
 <h2>Function 1 - transpose()</h2>
 <p>In linear algebra, the transpose of a matrix is an operator which flips a matrix over its diagonal, that is it switches
     the row and column indices of the matrix by producing. Here we will transpose tensor using pytorch transpose function</p>
-    <img alt="t1" class="align-left" src="../images/t1.jpg" style="width: 300px;" />
+    <img alt="t1" class="align-left" src="../images/t1.jpg"  />
  <p>x is a 2-D tensor. we swapped dimension 0 to dimension 1 using torch.transpose()</p>
-    <img alt="t2" class="align-left" src="../images/t2.pmg" style="width: 300px;" />
+    <img alt="t2" class="align-left" src="../images/t2.png"  />
     <p>we swapped dimension 1 to dimension 0.</p>
-    <img alt="t3" class="align-left" src="../images/t3.png" style="width: 300px;" />
+    <img alt="t3" class="align-left" src="../images/t3.png" />
     <p>we need to put the dimension which is going to be swapped without. And if we put same dimension twice it has no effect.</p>
     <p>Transpose function is very useful while matrix multiplication</p>
 
 <h2>Function 2 - stack()</h2>
     <p>This function conconate every new tensor in new dimension. It add every new tensor to additional dimension</p>
-    <img alt="s1" class="align-left" src="../images/s1.png" style="width: 300px;" />
+    <img alt="s1" class="align-left" src="../images/s1.png"  />
  <p>Here we stacked b over a and created an additional dimesion.</p>
-    <img alt="s2" class="align-left" src="../images/s2.png" style="width: 300px;" />
+    <img alt="s2" class="align-left" src="../images/s2.png" />
     <p>Here b is the stack of 3 a tensor</p>
-    <img alt="s3" class="align-left" src="../images/s3.png" style="width: 300px;" />
+    <img alt="s3" class="align-left" src="../images/s3.png"  />
     <p>To make an stack, all tensors need to be in equal size.</p>
     <p>while working with image data stack function is useful to numerical calculation.
         Like to calculate statistical values like mean, median, etc. Stacking makes easy to calculate all of these.</p>
 
 <h2>Function 3 - where()</h2>
     <p>Returns tensor of element with given condition</p>
-    <img alt="w1" class="align-left" src="../images/w1.png" style="width: 300px;" />
- <p>Explanation about example</p>
-    <img alt="w2" class="align-left" src="../images/w2.png" style="width: 300px;" />
+    <img alt="w1" class="align-left" src="../images/w1.png" />
+ <p>torch.where() returns a tensor with values y if x>0 else it return x.</p>
+    <img alt="w2" class="align-left" src="../images/w2.png" />
     <p>here we find the difference between x and y. This function can be used as a loss function in binary classification
         problems, where the target variable is similar like x and predicted value like y.</p>
-    <img alt="w3" class="align-left" src="../images/w3.png" style="width: 300px;" />
+    <img alt="w3" class="align-left" src="../images/w3.png"  />
     <p>If if size of y is less then x then pytorch automatically expand y to the size of x without additional memory.
         However if the size of y is greater then x, the it doesn't work.</p>
     <p>This function can be used as a loss function in binary classification problems.</p>
 
 <h2>Function 4 - backword()</h2>
     <p>This function is most important function in mathine leanring. It calculate the gradient of a function.</p>
-    <img alt="b1" class="align-left" src="../images/b1.png" style="width: 300px;" />
- <p>y = x^2 dy/dx = 2xdy/dx(x=4) = 2*4 =8</p>
-    <img alt="b2" class="align-left" src="../images/b2.png" style="width: 300px;" />
-    <p>y = x**2 dy/dx = 2*x x.grad = dy/dx(x==1), dy/dx(x==2), dy/dx(x==3) x.grad = 2, 4, 6 </p>
-    <img alt="b3" class="align-left" src="../images/b3.png" style="width: 300px;" />
+    <img alt="b1" class="align-left" src="../images/b1.png"  />
+ <div class="math">
+\begin{align*}
+y = x^2\\
+\frac{dy}{dx} = 2*x\\
+\left(\frac{dy}{dx}\right)|{x=2}=2*2 = 4
+\end{align*}
+</div>
+    <img alt="b2" class="align-left" src="../images/b2.png"  />
+    <div class="math">
+    \begin{align*}
+y = x^2\\
+\frac{dy}{dx} = 2*x\\
+x.grad = \left(\frac{dy}{dx}|{x=2},
+\frac{dy}{dx}|{x=2}
+\frac{dy}{dx}|{x=3}\right)\\
+x.grad = \left(2,4,6\right)\\
+\end{align*}
+        </div>
+    <img alt="b3" class="align-left" src="../images/b3.png"  />
     <p>To calculate gradient we need to set requires_grad = True.</p>
     <p>While updating the weight in gradient descent backword function is used to update the weight.</p>
 
 <h2>Function 5 - add()</h2>
 <p>To add two tensor</p>
-    <img alt="a1" class="align-left" src="../images/a1.png" style="width: 300px;" />
+    <img alt="a1" class="align-left" src="../images/a1.png" />
  <p>Here add function just work like + operator.</p>
-    <img alt="a2" class="align-left" src="../images/a2.png" style="width: 300px;" />
+    <img alt="a2" class="align-left" src="../images/a2.png" />
     <p>As you can see above the size of y is not the size of x. But pytorch expand the size of y by replacating
         its data and do elementwise operation.</p>
-    <img alt="a3" class="align-left" src="../images/a3.png" style="width: 300px;" />
+    <img alt="a3" class="align-left" src="../images/a3.png"  />
     <p>Here the size of y is greator then the size of x but x doesn't expand. Pytorch expand in every dimension,
         if it increase the dimension of x then it will become 3*3 still doesn't match the size of y.</p>
     <p>It is very helpful while doing tensor operation. Additional operator is one of the most used operator</p>
@@ -148,8 +163,8 @@
     <p>We have covered five most useful pytorch function. Go the the pytorch documentation and write five function of your choice.</p>
 
     <h2>Reference Links</h2>
-    <p>Official documentation for torch.Tensor: https://pytorch.org/docs/stable/tensors.html</p>
-    <p>Official documentation for torch.Tensor: https://pytorch.org/docs/stable/tensors.html</p>
+    <a>Official documentation for torch.Tensor is <a href="https://pytorch.org/docs/stable/tensors.html">
+        https://pytorch.org/docs/stable/tensors.html</a></p>
 
 </div>
 
